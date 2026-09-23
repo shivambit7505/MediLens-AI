@@ -1,0 +1,291 @@
+openapi: 3.0.3
+info:
+  title: MediLens AI - Internal AI Service Specification
+  description: >
+    Internal FastAPI service specification for deterministic OCR, biomarker extraction,
+    unit normalization, reference-range validation, and evidence-grounded RAG.
+    Protected by pre-shared internal API key header (`X-Internal-API-Key`).
+  version: 1.0.0
+servers:
+  - url: http://ai-service:8000
+    description: Internal Docker Service
+
+security:
+  - InternalApiKey: []
+
+paths:
+  /health:
+    get:
+      summary: Health and engine readiness probe
+      security: []
+      responses:
+        '200':
+          description: Service and OCR models healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  paddleOcrReady:
+                    type: boolean
+                  tesseractReady:
+                    type: boolean
+                  databaseReady:
+                    type: boolean
+
+  /internal/v1/ocr/process:
+    post:
+      summary: Run OpenCV preprocessing and dual-engine OCR on a report page
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - storagePath
+              properties:
+                storagePath:
+                  type: string
+                  description: File path in shared volume (/var/medilens/reports/...)
+                pageNumber:
+                  type: integer
+                  default: 1
+      responses:
+        '200':
+          description: OCR results with bounding boxes and confidence
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcrResult'
+        '400':
+          description: Invalid image format or corrupt file
+        '500':
+          description: OCR engine execution error
+
+  /internal/v1/biomarkers/extract-and-validate:
+    post:
+      summary: Deterministically extract biomarkers, normalize units, and evaluate reference ranges
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtractionRequest'
+      responses:
+        '200':
+          description: Extracted and deterministically validated measurements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtractionResponse'
+
+  /internal/v1/rag/retrieve:
+    post:
+      summary: Retrieve semantically relevant medical knowledge chunks via pgvector
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - query
+              properties:
+                query:
+                  type: string
+                topK:
+                  type: integer
+                  default: 5
+                similarityThreshold:
+                  type: number
+                  default: 0.75
+      responses:
+        '200':
+          description: Retrieved evidence chunks with citations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KnowledgeEvidence'
+
+  /internal/v1/rag/explain:
+    post:
+      summary: Generate evidence-grounded explanation with citation and clinical guardrail filtering
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - userQuery
+              properties:
+                userQuery:
+                  type: string
+                conversationHistory:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      role:
+                        type: string
+                      content:
+                        type: string
+                biomarkerContext:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      value:
+                        type: number
+                      unit:
+                        type: string
+                      status:
+                        type: string
+      responses:
+        '200':
+          description: Grounded medical explanation with citations and disclaimer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroundedExplanationResponse'
+
+components:
+  securitySchemes:
+    InternalApiKey:
+      type: apiKey
+      in: header
+      name: X-Internal-API-Key
+
+  schemas:
+    OcrResult:
+      type: object
+      properties:
+        pageNumber:
+          type: integer
+        engineUsed:
+          type: string
+          enum: [paddleocr, tesseract]
+        meanConfidence:
+          type: number
+        rawText:
+          type: string
+        textLines:
+          type: array
+          items:
+            type: object
+            properties:
+              text:
+                type: string
+              confidence:
+                type: number
+              boundingBox:
+                type: object
+                properties:
+                  x:
+                    type: integer
+                  y:
+                    type: integer
+                  width:
+                    type: integer
+                  height:
+                    type: integer
+
+    ExtractionRequest:
+      type: object
+      required:
+        - rawOcrText
+        - patientAgeYears
+        - patientGender
+      properties:
+        rawOcrText:
+          type: string
+        patientAgeYears:
+          type: number
+        patientGender:
+          type: string
+          enum: [MALE, FEMALE, OTHER, PREFER_NOT_TO_SAY]
+
+    ExtractionResponse:
+      type: object
+      properties:
+        extractedCount:
+          type: integer
+        measurements:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidatedMeasurement'
+
+    ValidatedMeasurement:
+      type: object
+      properties:
+        extractedName:
+          type: string
+        canonicalName:
+          type: string
+        codeLoinc:
+          type: string
+        observedValueRaw:
+          type: string
+        observedValueNumeric:
+          type: number
+          nullable: true
+        extractedUnit:
+          type: string
+        normalizedValueNumeric:
+          type: number
+        normalizedUnit:
+          type: string
+        referenceIntervalRaw:
+          type: string
+        status:
+          type: string
+          enum: [LOW, NORMAL, HIGH, CRITICAL, UNKNOWN]
+        confidence:
+          type: number
+        sourceSnippet:
+          type: string
+        matchedRangeCitation:
+          type: string
+
+    KnowledgeEvidence:
+      type: object
+      properties:
+        chunkId:
+          type: string
+          format: uuid
+        sourceTitle:
+          type: string
+        organization:
+          type: string
+        publicationDate:
+          type: string
+        url:
+          type: string
+        similarityScore:
+          type: number
+        content:
+          type: string
+
+    GroundedExplanationResponse:
+      type: object
+      properties:
+        content:
+          type: string
+        evidenceRetrievedCount:
+          type: integer
+        citations:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgeEvidence'
+        safetyDisclaimer:
+          type: string
+        guardrailCheckPassed:
+          type: boolean

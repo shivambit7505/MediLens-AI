@@ -1,0 +1,164 @@
+services:
+  # ----------------------------------------------------------------------------
+  # PostgreSQL 16 with pgvector extension
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: medilens-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-medilens_db}
+      POSTGRES_USER: ${POSTGRES_USER:-medilens_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_this_secure_password_in_production}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-medilens_admin} -d ${POSTGRES_DB:-medilens_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - medilens_network
+
+  # ----------------------------------------------------------------------------
+  # Redis Cache & Task Broker
+  # ----------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: medilens-redis
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-change_this_redis_password_in_production}"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-change_this_redis_password_in_production}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - medilens_network
+
+  # ----------------------------------------------------------------------------
+  # AI Service (FastAPI + PaddleOCR + Tesseract + RAG Engine)
+  # ----------------------------------------------------------------------------
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: medilens-ai-service
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-medilens_admin}:${POSTGRES_PASSWORD:-change_this_secure_password_in_production}@postgres:5432/${POSTGRES_DB:-medilens_db}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-change_this_redis_password_in_production}@redis:6379/0
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:-internal_pre_shared_key_between_backend_and_ai_service}
+      - REPORT_STORAGE_DIR=/var/medilens/reports
+      - OCR_ENGINE_PRIMARY=${OCR_ENGINE_PRIMARY:-paddleocr}
+      - OCR_ENGINE_FALLBACK=${OCR_ENGINE_FALLBACK:-tesseract}
+      - OCR_CONFIDENCE_THRESHOLD=${OCR_CONFIDENCE_THRESHOLD:-0.70}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    ports:
+      - "${AI_SERVICE_PORT:-8000}:8000"
+    volumes:
+      - report_storage:/var/medilens/reports
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - medilens_network
+
+  # ----------------------------------------------------------------------------
+  # Backend Service (Spring Boot 3 + Spring Security + JPA)
+  # ----------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: medilens-backend
+    restart: unless-stopped
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB:-medilens_db}
+      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:-medilens_admin}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-change_this_secure_password_in_production}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:-change_this_redis_password_in_production}
+      - JWT_SECRET=${JWT_SECRET:-super_secret_jwt_signing_key_must_be_at_least_256_bits_long_for_hs256_alg}
+      - JWT_EXPIRATION_MS=${JWT_EXPIRATION_MS:-86400000}
+      - AI_SERVICE_URL=http://ai-service:8000
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:-internal_pre_shared_key_between_backend_and_ai_service}
+      - REPORT_STORAGE_DIR=/var/medilens/reports
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    volumes:
+      - report_storage:/var/medilens/reports
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ai-service:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - medilens_network
+
+  # ----------------------------------------------------------------------------
+  # Frontend Application (React + TypeScript + Tailwind CSS)
+  # ----------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: medilens-frontend
+    restart: unless-stopped
+    environment:
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8080/api/v1}
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+    networks:
+      - medilens_network
+
+# ------------------------------------------------------------------------------
+# Persistent Volumes & Network Definitions
+# ------------------------------------------------------------------------------
+volumes:
+  postgres_data:
+    name: medilens_postgres_data
+  redis_data:
+    name: medilens_redis_data
+  report_storage:
+    name: medilens_report_storage
+
+networks:
+  medilens_network:
+    name: medilens_network
+    driver: bridge

@@ -1,0 +1,73 @@
+# Operating System Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment and Secrets (CRITICAL: Never commit secrets)
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.cert
+credentials.json
+
+# IDE & Editor Files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# Backend (Java / Maven / Gradle)
+backend/target/
+backend/.mvn/
+backend/*.log
+backend/logs/
+backend/*.jar
+backend/*.war
+
+# AI Service (Python / Virtualenv / Cache)
+ai-service/__pycache__/
+ai-service/*/__pycache__/
+ai-service/*/*/__pycache__/
+ai-service/*.py[cod]
+ai-service/*$py.class
+ai-service/.venv/
+ai-service/venv/
+ai-service/ENV/
+ai-service/env/
+ai-service/.pytest_cache/
+ai-service/.coverage
+ai-service/htmlcov/
+ai-service/.mypy_cache/
+ai-service/.ruff_cache/
+ai-service/models/
+
+# Frontend (Node / React / Vite)
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.next/
+frontend/.cache/
+frontend/coverage/
+frontend/*.log
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.pnpm-debug.log*
+
+# Docker & Storage Volumes
+data/
+uploads/
+storage/
+pgdata/
+redisdata/
+
+# Temporary and Scratch Files
+scratch/
+tmp/
+temp/

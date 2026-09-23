@@ -1,0 +1,39 @@
+from fastapi import FastAPI, Header, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+from app.core.config import settings
+
+app = FastAPI(
+    title="MediLens AI - Internal AI Engine",
+    description="Deterministic OCR, biomarker extraction, unit normalization, reference validation, and evidence-grounded RAG",
+    version="1.0.0",
+)
+
+# CORS Middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/health", tags=["System"])
+async def health_check():
+    """Health check endpoint for Docker container and orchestrator."""
+    return {
+        "status": "ok",
+        "service": "medilens-ai-service",
+        "environment": settings.ENVIRONMENT,
+        "ocr_primary": settings.OCR_ENGINE_PRIMARY,
+        "ocr_fallback": settings.OCR_ENGINE_FALLBACK,
+    }
+
+
+def verify_internal_key(x_internal_api_key: str = Header(None)):
+    """Verifies that requests originate from authorized internal services."""
+    if not x_internal_api_key or x_internal_api_key != settings.INTERNAL_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing X-Internal-API-Key header",
+        )

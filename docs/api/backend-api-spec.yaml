@@ -1,0 +1,716 @@
+openapi: 3.0.3
+info:
+  title: MediLens AI - Backend REST API Specification
+  description: >
+    Production REST API specification for the MediLens AI platform backend (Spring Boot 3).
+    Enforces JWT authentication, role-based authorization, strict tenant isolation,
+    asynchronous medical report processing, longitudinal biomarker tracking, and safety navigation.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local Development Environment
+
+security:
+  - BearerAuth: []
+
+paths:
+  # ----------------------------------------------------------------------------
+  # Authentication & Identity
+  # ----------------------------------------------------------------------------
+  /auth/register:
+    post:
+      summary: Register a new user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Email already in use
+
+  /auth/login:
+    post:
+      summary: Authenticate user and issue JWT tokens
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/refresh:
+    post:
+      summary: Refresh an expired access token using a valid refresh token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/me:
+    get:
+      summary: Get profile of authenticated user
+      responses:
+        '200':
+          description: Authenticated user details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ----------------------------------------------------------------------------
+  # Reports & Processing
+  # ----------------------------------------------------------------------------
+  /reports/upload:
+    post:
+      summary: Upload a medical report document (PDF, PNG, JPEG)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Medical report document file (max 25MB).
+      responses:
+        '202':
+          description: Report accepted for asynchronous processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportUploadResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          description: File size exceeds 25MB limit
+
+  /reports:
+    get:
+      summary: List all reports for the authenticated user
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated report list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportListResponse'
+
+  /reports/{id}:
+    get:
+      summary: Get details of a specific report
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detailed report information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportDetail'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /reports/{id}/status:
+    get:
+      summary: Poll processing status of a report
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Current lifecycle status of report processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportStatusResponse'
+
+  /reports/{id}/measurements:
+    get:
+      summary: Get structured laboratory measurements extracted from a report
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of validated measurements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MeasurementItem'
+
+  # ----------------------------------------------------------------------------
+  # Biomarkers & Longitudinal Trends
+  # ----------------------------------------------------------------------------
+  /biomarkers:
+    get:
+      summary: Get list of canonical biomarkers
+      responses:
+        '200':
+          description: Master biomarker catalog
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BiomarkerMaster'
+
+  /biomarkers/{id}/history:
+    get:
+      summary: Get historical longitudinal measurements for a specific biomarker
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Chronological list of measurements for trend visualization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BiomarkerHistoryResponse'
+
+  # ----------------------------------------------------------------------------
+  # Conversational Assistant (Grounded RAG)
+  # ----------------------------------------------------------------------------
+  /conversations:
+    post:
+      summary: Create a new health assistant conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  example: Inquiring about elevated glucose
+                reportId:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Conversation session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationResponse'
+
+  /conversations/{id}/messages:
+    post:
+      summary: Send user prompt to conversation; receives evidence-grounded response
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - content
+              properties:
+                content:
+                  type: string
+                  example: What does an elevated fasting glucose level typically indicate?
+      responses:
+        '200':
+          description: Assistant response with citation metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantMessageResponse'
+
+  # ----------------------------------------------------------------------------
+  # Safety Navigation & Medication Interactions
+  # ----------------------------------------------------------------------------
+  /medications/check-interactions:
+    post:
+      summary: Check for drug-drug interactions among user active medications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - medicationIds
+              properties:
+                medicationIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: Deterministic drug interaction evaluation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrugInteractionReport'
+
+  /triage/assess:
+    post:
+      summary: Evaluate symptoms and laboratory values against deterministic triage rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TriageAssessmentRequest'
+      responses:
+        '200':
+          description: Deterministic urgency level and recommended course of action
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriageAssessmentResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters or validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Unauthorized:
+      description: Authentication credentials missing or invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Forbidden:
+      description: Insufficient permissions to access this clinical resource
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    NotFound:
+      description: Requested clinical entity does not exist
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - firstName
+        - lastName
+        - dateOfBirth
+        - gender
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          minLength: 8
+        firstName:
+          type: string
+        lastName:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+        gender:
+          type: string
+          enum: [MALE, FEMALE, OTHER, PREFER_NOT_TO_SAY]
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    RefreshTokenRequest:
+      type: object
+      required:
+        - refreshToken
+      properties:
+        refreshToken:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        tokenType:
+          type: string
+          example: Bearer
+        expiresIn:
+          type: integer
+          example: 86400
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+        gender:
+          type: string
+        role:
+          type: string
+
+    ReportUploadResponse:
+      type: object
+      properties:
+        reportId:
+          type: string
+          format: uuid
+        filename:
+          type: string
+        status:
+          type: string
+          example: UPLOADED
+        message:
+          type: string
+
+    ReportListResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportSummary'
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+
+    ReportSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        originalFilename:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    ReportDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        originalFilename:
+          type: string
+        mimeType:
+          type: string
+        fileSizeBytes:
+          type: integer
+        status:
+          type: string
+        failureReason:
+          type: string
+          nullable: true
+        pageCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    ReportStatusResponse:
+      type: object
+      properties:
+        reportId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [UPLOADED, VALIDATING, PREPROCESSING, OCR_PROCESSING, EXTRACTING, NORMALIZING, VALIDATING_VALUES, COMPLETED, FAILED]
+        failureReason:
+          type: string
+          nullable: true
+
+    MeasurementItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        canonicalBiomarkerName:
+          type: string
+        observedValueRaw:
+          type: string
+        normalizedValue:
+          type: number
+        normalizedUnit:
+          type: string
+        referenceInterval:
+          type: string
+        status:
+          type: string
+          enum: [LOW, NORMAL, HIGH, CRITICAL, UNKNOWN]
+        confidence:
+          type: number
+        pageNumber:
+          type: integer
+        sourceSnippet:
+          type: string
+
+    BiomarkerMaster:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        canonicalName:
+          type: string
+        codeLoinc:
+          type: string
+        category:
+          type: string
+        standardUnit:
+          type: string
+
+    BiomarkerHistoryResponse:
+      type: object
+      properties:
+        biomarkerId:
+          type: string
+          format: uuid
+        canonicalName:
+          type: string
+        standardUnit:
+          type: string
+        dataPoints:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+              value:
+                type: number
+              status:
+                type: string
+
+    ConversationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    AssistantMessageResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        citations:
+          type: array
+          items:
+            type: object
+            properties:
+              sourceTitle:
+                type: string
+              organization:
+                type: string
+              urlOrReference:
+                type: string
+        safetyDisclaimer:
+          type: string
+
+    DrugInteractionReport:
+      type: object
+      properties:
+        hasInteractions:
+          type: boolean
+        interactions:
+          type: array
+          items:
+            type: object
+            properties:
+              medicationA:
+                type: string
+              medicationB:
+                type: string
+              severity:
+                type: string
+                enum: [MINOR, MODERATE, MAJOR, CONTRAINDICATED]
+              mechanism:
+                type: string
+              clinicalEvidence:
+                type: string
+
+    TriageAssessmentRequest:
+      type: object
+      properties:
+        symptomIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        biomarkerMeasurements:
+          type: array
+          items:
+            type: object
+            properties:
+              biomarkerId:
+                type: string
+                format: uuid
+              value:
+                type: number
+
+    TriageAssessmentResponse:
+      type: object
+      properties:
+        urgencyLevel:
+          type: string
+          enum: [ROUTINE, URGENT, EMERGENCY]
+        isEmergency:
+          type: boolean
+        actionInstruction:
+          type: string
+        matchedRules:
+          type: array
+          items:
+            type: string
+        disclaimer:
+          type: string
+
+    ApiError:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string
+        path:
+          type: string
