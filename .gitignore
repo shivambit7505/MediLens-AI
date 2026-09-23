@@ -68,6 +68,7 @@ pgdata/
 redisdata/
 
 # Temporary and Scratch Files
+.tools/
 scratch/
 tmp/
 temp/
