@@ -30,10 +30,8 @@ async def health_check():
     }
 
 
-def verify_internal_key(x_internal_api_key: str = Header(None)):
-    """Verifies that requests originate from authorized internal services."""
-    if not x_internal_api_key or x_internal_api_key != settings.INTERNAL_API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing X-Internal-API-Key header",
-        )
+from app.api.ocr_routes import router as ocr_router
+from app.api.biomarker_routes import router as biomarker_router
+
+app.include_router(ocr_router)
+app.include_router(biomarker_router)

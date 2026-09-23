@@ -1,8 +1,10 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "INFO"
     AI_SERVICE_PORT: int = 8000
@@ -24,10 +26,6 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "gpt-4o-mini"
     OPENAI_API_KEY: Optional[str] = None
     ANTHROPIC_API_KEY: Optional[str] = None
-
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
 
 
 settings = Settings()
