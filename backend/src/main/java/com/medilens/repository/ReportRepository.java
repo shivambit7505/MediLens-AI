@@ -15,4 +15,6 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
     Optional<Report> findByIdAndUserId(UUID id, UUID userId);
     boolean existsByIdAndUserId(UUID id, UUID userId);
     Optional<Report> findByUserIdAndFileHashSha256(UUID userId, String fileHashSha256);
+    long countByUserId(UUID userId);
+    java.util.List<Report> findTop5ByUserIdOrderByCreatedAtDesc(UUID userId);
 }
