@@ -2,6 +2,7 @@ package com.medilens.controller;
 
 import com.medilens.dto.report.MeasurementResponseDto;
 import com.medilens.dto.report.ReportDetailResponseDto;
+import com.medilens.dto.report.ReportExplanationResponseDto;
 import com.medilens.dto.report.ReportResponseDto;
 import com.medilens.exception.ResourceNotFoundException;
 import com.medilens.exception.UnauthorizedException;
@@ -111,5 +112,21 @@ public class ReportController {
         return ResponseEntity.ok()
                 .contentType(MediaType.IMAGE_PNG)
                 .body(imageResource);
+    }
+
+    @GetMapping("/{id}/explanation")
+    public ResponseEntity<ReportExplanationResponseDto> getReportExplanation(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        if (principal == null) {
+            throw new UnauthorizedException("Authentication required");
+        }
+
+        User user = userRepository.findById(principal.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", principal.getId()));
+
+        ReportExplanationResponseDto explanation = reportProcessingService.getReportExplanation(id, user);
+        return ResponseEntity.ok(explanation);
     }
 }

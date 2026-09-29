@@ -3,10 +3,13 @@ package com.medilens.service;
 import com.medilens.client.AiExtractionResponse;
 import com.medilens.client.AiMeasurementDto;
 import com.medilens.client.AiOcrResponse;
+import com.medilens.client.AiRagRequest;
+import com.medilens.client.AiRagResponse;
 import com.medilens.client.AiServiceClient;
 import com.medilens.document.DocumentProcessor;
 import com.medilens.dto.report.MeasurementResponseDto;
 import com.medilens.dto.report.ReportDetailResponseDto;
+import com.medilens.dto.report.ReportExplanationResponseDto;
 import com.medilens.dto.report.ReportResponseDto;
 import com.medilens.exception.ResourceNotFoundException;
 import com.medilens.model.*;
@@ -253,5 +256,78 @@ public class ReportProcessingService {
                 .orElseThrow(() -> new ResourceNotFoundException("ReportPage", "pageNumber", pageNumber));
 
         return storageService.loadAsResource(targetPage.getImageStoragePath());
+    }
+
+    @Transactional(readOnly = true)
+    public ReportExplanationResponseDto getReportExplanation(UUID reportId, User user) {
+        Report report = reportRepository.findByIdAndUserId(reportId, user.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Report", "id", reportId));
+
+        List<Measurement> measurements = measurementRepository.findByReportIdAndUserId(reportId, user.getId());
+
+        double patientAgeYears = 35.0;
+        if (user.getDateOfBirth() != null) {
+            long days = java.time.temporal.ChronoUnit.DAYS.between(user.getDateOfBirth(), java.time.LocalDate.now());
+            patientAgeYears = days / 365.25;
+        }
+        String patientGender = user.getGender() != null ? user.getGender() : "ALL";
+
+        List<AiRagRequest.AiRagBiomarkerInput> inputs = measurements.stream()
+                .map(m -> new AiRagRequest.AiRagBiomarkerInput(
+                        m.getExtractedName(),
+                        m.getBiomarker() != null ? m.getBiomarker().getCanonicalName() : m.getExtractedName(),
+                        m.getObservedValueRaw(),
+                        m.getNormalizedValueNumeric() != null ? m.getNormalizedValueNumeric().doubleValue() : 0.0,
+                        m.getNormalizedUnit() != null ? m.getNormalizedUnit() : "",
+                        m.getExtractedReferenceText(),
+                        m.getStatus() != null ? m.getStatus().name() : "UNKNOWN"
+                ))
+                .toList();
+
+        AiRagRequest ragRequest = new AiRagRequest(
+                report.getId().toString(),
+                patientAgeYears,
+                patientGender,
+                inputs
+        );
+
+        AiRagResponse aiResponse = aiServiceClient.generateReportExplanation(ragRequest);
+
+        List<ReportExplanationResponseDto.BiomarkerExplanationDto> findings = aiResponse.findings() != null
+                ? aiResponse.findings().stream()
+                .map(f -> new ReportExplanationResponseDto.BiomarkerExplanationDto(
+                        f.canonicalName(),
+                        f.observedValue(),
+                        f.status(),
+                        f.referenceInterval(),
+                        f.explanation(),
+                        f.clinicalSignificance(),
+                        f.lifestyleGuidance(),
+                        f.sources()
+                ))
+                .toList()
+                : List.of();
+
+        List<ReportExplanationResponseDto.EvidenceSourceDto> sources = aiResponse.citedSources() != null
+                ? aiResponse.citedSources().stream()
+                .map(s -> new ReportExplanationResponseDto.EvidenceSourceDto(
+                        s.chunkId(),
+                        s.title(),
+                        s.source(),
+                        s.category()
+                ))
+                .toList()
+                : List.of();
+
+        return new ReportExplanationResponseDto(
+                report.getId(),
+                aiResponse.summary(),
+                findings,
+                aiResponse.questionsForDoctor(),
+                aiResponse.criticalAlert(),
+                aiResponse.disclaimer(),
+                sources,
+                aiResponse.safetyAuditPassed()
+        );
     }
 }

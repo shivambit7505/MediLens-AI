@@ -32,6 +32,8 @@ async def health_check():
 
 from app.api.ocr_routes import router as ocr_router
 from app.api.biomarker_routes import router as biomarker_router
+from app.api.rag_routes import router as rag_router
 
 app.include_router(ocr_router)
 app.include_router(biomarker_router)
+app.include_router(rag_router)

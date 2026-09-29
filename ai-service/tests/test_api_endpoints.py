@@ -63,3 +63,41 @@ def test_biomarker_extraction_with_valid_auth(client):
     assert measurements[0]["status"] == "NORMAL"
     assert measurements[1]["canonical_name"] == "Platelet Count"
     assert measurements[1]["status"] == "NORMAL"
+
+
+def test_rag_explanation_endpoint(client):
+    payload = {
+        "report_id": "test-report-001",
+        "patient_age_years": 40.0,
+        "patient_gender": "FEMALE",
+        "measurements": [
+            {
+                "canonical_name": "Hemoglobin",
+                "normalized_value_numeric": 9.8,
+                "normalized_unit": "g/dL",
+                "reference_interval_raw": "12.1-15.1",
+                "status": "LOW",
+            },
+            {
+                "canonical_name": "Glucose",
+                "normalized_value_numeric": 115.0,
+                "normalized_unit": "mg/dL",
+                "reference_interval_raw": "70-99",
+                "status": "HIGH",
+            },
+        ],
+    }
+    headers = {"X-Internal-API-Key": settings.INTERNAL_API_KEY}
+    response = client.post(
+        "/internal/v1/rag/explain-report",
+        json=payload,
+        headers=headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["report_id"] == "test-report-001"
+    assert len(data["findings"]) == 2
+    assert "disclaimer" in data
+    assert len(data["cited_sources"]) > 0
+    assert data["safety_audit_passed"] is True
+

@@ -48,4 +48,15 @@ public class AiServiceClientImpl implements AiServiceClient {
                 .retrieve()
                 .body(AiExtractionResponse.class);
     }
+
+    @Override
+    public AiRagResponse generateReportExplanation(AiRagRequest request) {
+        logger.info("Calling AI Service RAG explanation for report {}", request.reportId());
+        return restClient.post()
+                .uri("/internal/v1/rag/explain-report")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(request)
+                .retrieve()
+                .body(AiRagResponse.class);
+    }
 }
