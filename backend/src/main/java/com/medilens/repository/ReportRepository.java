@@ -14,4 +14,5 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
     Page<Report> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
     Optional<Report> findByIdAndUserId(UUID id, UUID userId);
     boolean existsByIdAndUserId(UUID id, UUID userId);
+    Optional<Report> findByUserIdAndFileHashSha256(UUID userId, String fileHashSha256);
 }

@@ -63,7 +63,7 @@ frontend/.pnpm-debug.log*
 # Docker & Storage Volumes
 data/
 uploads/
-storage/
+/storage/
 pgdata/
 redisdata/
 

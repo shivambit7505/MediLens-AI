@@ -11,3 +11,7 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
+medilens:
+  storage:
+    reports-dir: ./data/reports
