@@ -59,4 +59,15 @@ public class AiServiceClientImpl implements AiServiceClient {
                 .retrieve()
                 .body(AiRagResponse.class);
     }
+
+    @Override
+    public AiChatResponse chat(AiChatRequest request) {
+        logger.info("Calling AI Service RAG conversational chat for query: {}", request.getQuery());
+        return restClient.post()
+                .uri("/internal/v1/rag/chat")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(request)
+                .retrieve()
+                .body(AiChatResponse.class);
+    }
 }

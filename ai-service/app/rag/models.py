@@ -51,3 +51,23 @@ class RagExplanationResponse(BaseModel):
     disclaimer: str
     cited_sources: List[EvidenceSource] = Field(default_factory=list)
     safety_audit_passed: bool = True
+
+
+class RagChatMessage(BaseModel):
+    role: str  # 'user' or 'assistant'
+    content: str
+
+
+class RagChatRequest(BaseModel):
+    query: str
+    patient_context: Optional[str] = None
+    recent_biomarkers: List[RagBiomarkerInput] = Field(default_factory=list)
+    history: List[RagChatMessage] = Field(default_factory=list)
+
+
+class RagChatResponse(BaseModel):
+    reply: str
+    cited_sources: List[EvidenceSource] = Field(default_factory=list)
+    suggested_followups: List[str] = Field(default_factory=list)
+    disclaimer: str
+    guardrail_passed: bool = True

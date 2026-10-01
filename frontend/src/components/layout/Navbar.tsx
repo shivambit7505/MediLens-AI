@@ -10,7 +10,8 @@ import {
   ShieldCheck,
   ShieldAlert,
   Pill,
-  Compass
+  Compass,
+  MessageSquare
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -27,6 +28,7 @@ export const Navbar: React.FC = () => {
     { name: 'Dashboard', path: '/dashboard', icon: Activity },
     { name: 'Upload', path: '/upload', icon: UploadCloud },
     { name: 'Reports', path: '/reports', icon: FileText },
+    { name: 'AI Assistant', path: '/chat', icon: MessageSquare },
     { name: 'Biomarkers', path: '/biomarkers', icon: TrendingUp },
     { name: 'Triage', path: '/triage', icon: ShieldAlert },
     { name: 'Medications', path: '/medications', icon: Pill },

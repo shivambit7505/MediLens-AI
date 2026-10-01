@@ -40,4 +40,12 @@ export const reportApi = {
     const baseURL = apiClient.defaults.baseURL || 'http://127.0.0.1:8080/api/v1';
     return `${baseURL}/reports/${reportId}/pages/${pageNumber}/image`;
   },
+
+  exportReportPdf: async (reportId: string): Promise<Blob> => {
+    const response = await apiClient.get(`/reports/${reportId}/export-pdf`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
 };
+

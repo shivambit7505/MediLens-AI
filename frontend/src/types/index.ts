@@ -281,3 +281,33 @@ export interface CareNavigationResponse {
   statutoryDisclaimer: string;
 }
 
+export interface ChatMessage {
+  id: string;
+  sender: 'USER' | 'ASSISTANT' | 'SYSTEM';
+  content: string;
+  citedSources: string[];
+  suggestedQuestions: string[];
+  safetyPassed: boolean;
+  createdAt: string;
+}
+
+export interface ConversationSummary {
+  id: string;
+  reportId?: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  lastMessageSnippet?: string;
+  messageCount: number;
+}
+
+export interface ConversationDetail {
+  id: string;
+  reportId?: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: ChatMessage[];
+  suggestedPrompts: string[];
+}
+

@@ -12,7 +12,9 @@ import {
   ChevronDown,
   ChevronUp,
   Image as ImageIcon,
-  Sparkles
+  Sparkles,
+  Download,
+  MessageSquare
 } from 'lucide-react';
 
 const getStatusBadge = (status: MeasurementStatus) => {
@@ -43,6 +45,27 @@ export const ReportDetailPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [activePage, setActivePage] = useState(1);
   const [expandedFindings, setExpandedFindings] = useState<Record<string, boolean>>({});
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  const handleDownloadPdf = async () => {
+    if (!id) return;
+    setDownloadingPdf(true);
+    try {
+      const blob = await reportApi.exportReportPdf(id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `medilens-report-summary-${id.substring(0, 8)}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert('Failed to generate PDF summary: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -114,9 +137,27 @@ export const ReportDetailPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to={`/chat?reportId=${report.id}`}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span>Ask AI Assistant</span>
+          </Link>
+
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            disabled={downloadingPdf}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50 transition shadow-sm"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>{downloadingPdf ? 'Exporting PDF...' : 'Download PDF Summary'}</span>
+          </button>
+
           <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-            Status: {report.status}
+            {report.status}
           </span>
         </div>
       </div>

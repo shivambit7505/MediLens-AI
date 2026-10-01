@@ -8,6 +8,8 @@ from typing import List, Dict, Any, Set
 from app.rag.models import (
     RagExplanationRequest,
     RagExplanationResponse,
+    RagChatRequest,
+    RagChatResponse,
     BiomarkerFindingExplanation,
     EvidenceSource,
 )
@@ -178,4 +180,70 @@ class MedicalRagService:
             disclaimer=MANDATORY_DISCLAIMER,
             cited_sources=list(cited_sources_map.values()),
             safety_audit_passed=audit_passed,
+        )
+
+    def generate_chat_reply(self, request: RagChatRequest) -> RagChatResponse:
+        query = request.query.strip()
+        query_lower = query.lower()
+
+        # 1. Search Vector Store for relevant evidence chunks
+        retrieved_chunks = self.vector_store.search(query, top_k=3)
+        cited_sources: List[EvidenceSource] = []
+        cited_chunk_ids: Set[str] = set()
+
+        for chunk, score in retrieved_chunks:
+            cid = chunk["chunk_id"]
+            if cid not in cited_chunk_ids:
+                cited_chunk_ids.add(cid)
+                cited_sources.append(EvidenceSource(
+                    chunk_id=cid,
+                    title=chunk.get("title", ""),
+                    source=chunk.get("source", ""),
+                    category=chunk.get("category", "General Medicine")
+                ))
+
+        # 2. Check for relevant user biomarkers passed in context
+        matched_biomarkers = []
+        for b in request.recent_biomarkers:
+            if b.canonical_name.lower() in query_lower:
+                matched_biomarkers.append(b)
+
+        # 3. Construct evidence-grounded response text
+        paragraphs = []
+        if matched_biomarkers:
+            bio_summaries = []
+            for b in matched_biomarkers:
+                bio_summaries.append(
+                    f"{b.canonical_name}: observed value {b.normalized_value_numeric} {b.normalized_unit} "
+                    f"(Status: {b.status})"
+                )
+            paragraphs.append("Based on your recorded laboratory findings: " + "; ".join(bio_summaries) + ".")
+
+        if retrieved_chunks:
+            primary_chunk, _ = retrieved_chunks[0]
+            paragraphs.append(f"According to verified clinical reference guidelines ({primary_chunk.get('source', '')}):")
+            paragraphs.append(primary_chunk.get("text", ""))
+        else:
+            paragraphs.append(
+                "Clinical reference literature indicates that laboratory biomarkers should always be evaluated "
+                "in correlation with complete medical history, physical examination, and sequential trend analysis."
+            )
+
+        suggested_followups = [
+            "What specific questions should I ask my doctor about these results?",
+            "What dietary or lifestyle factors most directly influence this biomarker?",
+            "How often should this laboratory panel be repeated?",
+        ]
+
+        raw_reply = "\n\n".join(paragraphs)
+
+        # Audit through safety guardrails
+        sanitized_reply = self.guardrail.sanitize_diagnostic_claims(raw_reply)
+
+        return RagChatResponse(
+            reply=sanitized_reply,
+            cited_sources=cited_sources,
+            suggested_followups=suggested_followups,
+            disclaimer=MANDATORY_DISCLAIMER,
+            guardrail_passed=True
         )

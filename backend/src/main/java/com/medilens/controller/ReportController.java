@@ -30,10 +30,14 @@ public class ReportController {
 
     private final ReportProcessingService reportProcessingService;
     private final UserRepository userRepository;
+    private final com.medilens.service.PdfExportService pdfExportService;
 
-    public ReportController(ReportProcessingService reportProcessingService, UserRepository userRepository) {
+    public ReportController(ReportProcessingService reportProcessingService,
+                            UserRepository userRepository,
+                            com.medilens.service.PdfExportService pdfExportService) {
         this.reportProcessingService = reportProcessingService;
         this.userRepository = userRepository;
+        this.pdfExportService = pdfExportService;
     }
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -128,5 +132,21 @@ public class ReportController {
 
         ReportExplanationResponseDto explanation = reportProcessingService.getReportExplanation(id, user);
         return ResponseEntity.ok(explanation);
+    }
+
+    @GetMapping("/{id}/export-pdf")
+    public ResponseEntity<byte[]> exportReportPdf(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        if (principal == null) {
+            throw new UnauthorizedException("Authentication required to export report");
+        }
+
+        byte[] pdfBytes = pdfExportService.generateReportPdf(principal.getId(), id);
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"medilens-report-" + id + ".pdf\"")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdfBytes);
     }
 }

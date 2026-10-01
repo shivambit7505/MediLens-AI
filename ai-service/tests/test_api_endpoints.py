@@ -101,3 +101,34 @@ def test_rag_explanation_endpoint(client):
     assert len(data["cited_sources"]) > 0
     assert data["safety_audit_passed"] is True
 
+
+def test_rag_chat_endpoint(client):
+    payload = {
+        "query": "What causes elevated fasting glucose levels?",
+        "patient_context": "Age 45, Male",
+        "recent_biomarkers": [
+            {
+                "canonical_name": "Fasting Blood Glucose",
+                "normalized_value_numeric": 135.0,
+                "normalized_unit": "mg/dL",
+                "status": "HIGH"
+            }
+        ],
+        "history": []
+    }
+    headers = {"X-Internal-API-Key": settings.INTERNAL_API_KEY}
+    response = client.post(
+        "/internal/v1/rag/chat",
+        json=payload,
+        headers=headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "reply" in data
+    assert len(data["reply"]) > 20
+    assert "disclaimer" in data
+    assert len(data["cited_sources"]) > 0
+    assert len(data["suggested_followups"]) > 0
+    assert data["guardrail_passed"] is True
+
+
