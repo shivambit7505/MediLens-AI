@@ -145,3 +145,139 @@ export interface DashboardSummary {
   criticalCount: number;
   recentReports: Report[];
 }
+
+// ----------------------------------------------------------------------------
+// Phase 7: Clinical Safety, Triage, Drug Interactions & Care Navigation Types
+// ----------------------------------------------------------------------------
+
+export type TriageUrgency = 'ROUTINE' | 'URGENT' | 'EMERGENCY';
+
+export interface BiomarkerReading {
+  canonicalName: string;
+  valueNumeric: number;
+  unit: string;
+}
+
+export interface TriageTrigger {
+  triggerType: 'BIOMARKER' | 'SYMPTOM';
+  name: string;
+  observedValue?: number;
+  operator?: string;
+  threshold?: number;
+  unit?: string;
+  urgencyLevel: TriageUrgency;
+  clinicalInstruction: string;
+  rationale: string;
+}
+
+export interface TriageEvaluationRequest {
+  readings: BiomarkerReading[];
+  symptoms: string[];
+  includeLatestReportBiomarkers?: boolean;
+}
+
+export interface TriageEvaluationResponse {
+  overallUrgency: TriageUrgency;
+  emergencyFlag: boolean;
+  urgencyBadgeColor: string;
+  primaryActionDirective: string;
+  triggers: TriageTrigger[];
+  recommendedSpecialties: string[];
+  disclaimerText: string;
+}
+
+export interface TriageRule {
+  id: string;
+  ruleName: string;
+  biomarkerCanonicalName: string;
+  comparisonOperator: string;
+  thresholdNumeric: number;
+  unit: string;
+  urgencyLevel: TriageUrgency;
+  deterministicActionInstruction: string;
+  disclaimerText: string;
+}
+
+export type InteractionSeverity = 'MINOR' | 'MODERATE' | 'MAJOR' | 'CONTRAINDICATED';
+
+export interface Medication {
+  id: string;
+  brandName: string;
+  genericName: string;
+  rxnormCui?: string;
+  therapeuticClass: string;
+  standardDosageGuidelines?: string;
+}
+
+export interface UserMedication {
+  id: string;
+  medication: Medication;
+  dosage: string;
+  frequency: string;
+  startDate: string;
+  endDate?: string;
+  active: boolean;
+}
+
+export interface AddUserMedicationRequest {
+  medicationId: string;
+  dosage: string;
+  frequency: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface DrugInteraction {
+  id: string;
+  medicationA: Medication;
+  medicationB: Medication;
+  severity: InteractionSeverity;
+  severityBadgeColor: string;
+  interactionMechanism: string;
+  clinicalEvidenceSource: string;
+}
+
+export interface InteractionCheckResponse {
+  hasInteractions: boolean;
+  totalInteractionsCount: number;
+  highestSeverity?: InteractionSeverity;
+  highestSeverityBadgeColor: string;
+  interactions: DrugInteraction[];
+  clinicalWarning: string;
+  statutoryDisclaimer: string;
+}
+
+export interface Provider {
+  id: string;
+  name: string;
+  title: string;
+  specialty: string;
+  clinicName: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  phone: string;
+  rating: number;
+  reviewCount: number;
+  distanceMiles: number;
+  telehealthAvailable: boolean;
+  acceptingNewPatients: boolean;
+  affiliatedHospitals: string[];
+  clinicalInterests: string[];
+}
+
+export interface SpecialtyRecommendation {
+  specialty: string;
+  clinicalReason: string;
+  urgency: 'URGENT' | 'ROUTINE';
+  triggeringBiomarkers: string[];
+  suggestedQuestionsForDoctor: string;
+}
+
+export interface CareNavigationResponse {
+  recommendations: SpecialtyRecommendation[];
+  nearbyProviders: Provider[];
+  statutoryDisclaimer: string;
+}
+

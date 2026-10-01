@@ -11,6 +11,9 @@ import { ReportListPage } from './pages/ReportListPage';
 import { ReportDetailPage } from './pages/ReportDetailPage';
 import { BiomarkersPage } from './pages/BiomarkersPage';
 import { BiomarkerDetailPage } from './pages/BiomarkerDetailPage';
+import { TriagePage } from './pages/TriagePage';
+import { MedicationsPage } from './pages/MedicationsPage';
+import { CareNavigatorPage } from './pages/CareNavigatorPage';
 
 export const App: React.FC = () => {
   return (
@@ -76,6 +79,30 @@ export const App: React.FC = () => {
               element={
                 <ProtectedRoute>
                   <BiomarkerDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/triage"
+              element={
+                <ProtectedRoute>
+                  <TriagePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/medications"
+              element={
+                <ProtectedRoute>
+                  <MedicationsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/providers"
+              element={
+                <ProtectedRoute>
+                  <CareNavigatorPage />
                 </ProtectedRoute>
               }
             />

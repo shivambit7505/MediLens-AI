@@ -7,7 +7,10 @@ import {
   FileText, 
   TrendingUp, 
   LogOut, 
-  ShieldCheck
+  ShieldCheck,
+  ShieldAlert,
+  Pill,
+  Compass
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -22,9 +25,12 @@ export const Navbar: React.FC = () => {
 
   const navLinks = [
     { name: 'Dashboard', path: '/dashboard', icon: Activity },
-    { name: 'Upload Report', path: '/upload', icon: UploadCloud },
+    { name: 'Upload', path: '/upload', icon: UploadCloud },
     { name: 'Reports', path: '/reports', icon: FileText },
     { name: 'Biomarkers', path: '/biomarkers', icon: TrendingUp },
+    { name: 'Triage', path: '/triage', icon: ShieldAlert },
+    { name: 'Medications', path: '/medications', icon: Pill },
+    { name: 'Care Navigator', path: '/providers', icon: Compass },
   ];
 
   return (

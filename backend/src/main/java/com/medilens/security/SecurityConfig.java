@@ -74,6 +74,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/", "/health").permitAll()
                         .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
+                        .requestMatchers("/api/v1/triage/**").permitAll()
+                        .requestMatchers("/api/v1/medications").permitAll()
+                        .requestMatchers("/api/v1/medications/check-interactions").permitAll()
+                        .requestMatchers("/api/v1/providers/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .anyRequest().authenticated()
