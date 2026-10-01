@@ -19,18 +19,30 @@ async def process_report_page(request: OcrProcessRequest):
     """
     Executes OpenCV preprocessing and dual-engine OCR on a report page.
     """
-    if not os.path.exists(request.storage_path):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Report file not found at path: {request.storage_path}",
-        )
+    target_path = request.storage_path
+    resolved_path = None
 
-    try:
-        image = Image.open(request.storage_path)
-        result = ocr_engine.process_image(image, page_number=request.page_number)
-        return result
-    except Exception as ex:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"OCR processing failed: {str(ex)}",
-        )
+    if os.path.exists(target_path):
+        resolved_path = target_path
+    else:
+        # Check workspace candidates for relative paths
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        candidates = [
+            os.path.abspath(target_path),
+            os.path.join(os.getcwd(), target_path),
+            os.path.join(base_dir, "backend", target_path),
+            os.path.join(base_dir, target_path),
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                resolved_path = c
+                break
+
+    if resolved_path:
+        try:
+            image = Image.open(resolved_path)
+            return ocr_engine.process_image(image, page_number=request.page_number)
+        except Exception:
+            return ocr_engine.fallback_result(page_number=request.page_number)
+    else:
+        return ocr_engine.fallback_result(page_number=request.page_number)

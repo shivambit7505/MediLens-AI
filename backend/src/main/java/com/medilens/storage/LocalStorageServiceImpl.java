@@ -49,7 +49,7 @@ public class LocalStorageServiceImpl implements StorageService {
                 Files.copy(inputStream, destinationFile, StandardCopyOption.REPLACE_EXISTING);
             }
 
-            return destinationFile.toString();
+            return destinationFile.toAbsolutePath().normalize().toString();
         } catch (IOException e) {
             throw new RuntimeException("Failed to store report file", e);
         }
@@ -70,7 +70,7 @@ public class LocalStorageServiceImpl implements StorageService {
             }
 
             Files.write(pageFile, imageBytes);
-            return pageFile.toString();
+            return pageFile.toAbsolutePath().normalize().toString();
         } catch (IOException e) {
             throw new RuntimeException("Failed to store page image for page: " + pageNumber, e);
         }

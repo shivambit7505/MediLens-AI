@@ -18,6 +18,17 @@ app.add_middleware(
 )
 
 
+@app.get("/", tags=["System"])
+async def root():
+    """Welcome endpoint for MediLens AI Service."""
+    return {
+        "service": "MediLens AI Engine",
+        "documentation": "/docs",
+        "health": "/health",
+        "status": "online"
+    }
+
+
 @app.get("/health", tags=["System"])
 async def health_check():
     """Health check endpoint for Docker container and orchestrator."""

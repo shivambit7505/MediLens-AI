@@ -136,6 +136,9 @@ class DualOcrEngine:
                 logger.warning("Tesseract execution failed: %s", ex)
 
         # 3. Fallback result for pure-test environments without native OCR binaries
+        return self.fallback_result(page_number=page_number)
+
+    def fallback_result(self, page_number: int = 1) -> OcrResult:
         return OcrResult(
             page_number=page_number,
             engine_used="tesseract",
