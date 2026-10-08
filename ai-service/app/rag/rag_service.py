@@ -4,7 +4,9 @@ Orchestrates retrieval of validated clinical guidelines, assembles structured pa
 educational explanations, and strictly enforces clinical safety guardrails.
 """
 
-from typing import List, Dict, Any, Set
+import httpx
+from typing import List, Dict, Any, Set, Optional
+from app.core.config import settings
 from app.rag.models import (
     RagExplanationRequest,
     RagExplanationResponse,
@@ -235,7 +237,30 @@ class MedicalRagService:
             "How often should this laboratory panel be repeated?",
         ]
 
-        raw_reply = "\n\n".join(paragraphs)
+        # Try selected provider or fallback gracefully between Gemini and OpenAI
+        llm_reply = None
+        context_blocks = [chunk.get("text", "") for chunk, _ in retrieved_chunks]
+        if matched_biomarkers:
+            context_blocks.insert(
+                0,
+                "; ".join(
+                    f"{b.canonical_name}: {b.normalized_value_numeric} {b.normalized_unit} ({b.status})"
+                    for b in matched_biomarkers
+                ),
+            )
+        combined_context = "\n\n".join(context_blocks)
+
+        if settings.LLM_PROVIDER == "openai":
+            llm_reply = self._call_openai_api(query=query, context_text=combined_context)
+            if not llm_reply and settings.GEMINI_API_KEY:
+                llm_reply = self._call_gemini_api(query=query, context_text=combined_context)
+        else:
+            if settings.GEMINI_API_KEY:
+                llm_reply = self._call_gemini_api(query=query, context_text=combined_context)
+            if not llm_reply and settings.OPENAI_API_KEY:
+                llm_reply = self._call_openai_api(query=query, context_text=combined_context)
+
+        raw_reply = llm_reply if llm_reply else "\n\n".join(paragraphs)
 
         # Audit through safety guardrails
         sanitized_reply = self.guardrail.sanitize_diagnostic_claims(raw_reply)
@@ -245,5 +270,83 @@ class MedicalRagService:
             cited_sources=cited_sources,
             suggested_followups=suggested_followups,
             disclaimer=MANDATORY_DISCLAIMER,
-            guardrail_passed=True
+            guardrail_passed=True,
         )
+
+    def _call_gemini_api(self, query: str, context_text: str) -> Optional[str]:
+        """Calls Google Gemini API with clinical evidence grounding."""
+        api_key = settings.GEMINI_API_KEY
+        if not api_key:
+            return None
+
+        system_instruction = (
+            "You are MediLens AI, an evidence-grounded clinical laboratory educational assistant. "
+            "Explain lab findings and health inquiries strictly based on the provided clinical evidence. "
+            "Never provide a definitive diagnosis or prescribe medications. "
+            "Always maintain an objective educational tone and advise the patient to consult their licensed physician."
+        )
+        prompt = f"Clinical Evidence Context:\n{context_text}\n\nUser Question:\n{query}"
+        model_name = settings.LLM_MODEL.strip() if settings.LLM_MODEL else "gemini-flash-latest"
+        if not model_name.startswith("models/"):
+            model_name = f"models/{model_name}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/{model_name}:generateContent?key={api_key}"
+
+        payload = {
+            "contents": [
+                {
+                    "parts": [{"text": f"{system_instruction}\n\n{prompt}"}]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.2,
+                "maxOutputTokens": 600,
+            },
+        }
+        try:
+            with httpx.Client(timeout=20.0) as client:
+                res = client.post(url, json=payload)
+                if res.status_code == 200:
+                    data = res.json()
+                    candidates = data.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts:
+                            return parts[0].get("text", "").strip()
+        except Exception:
+            return None
+        return None
+
+    def _call_openai_api(self, query: str, context_text: str) -> Optional[str]:
+        """Calls OpenAI Chat Completions API with clinical evidence grounding."""
+        api_key = settings.OPENAI_API_KEY
+        if not api_key or api_key.strip() in ("", "your_openai_api_key_here"):
+            return None
+
+        system_instruction = (
+            "You are MediLens AI, an evidence-grounded clinical laboratory educational assistant. "
+            "Explain lab findings and health inquiries strictly based on the provided clinical evidence. "
+            "Never provide a definitive diagnosis or prescribe medications. "
+            "Always maintain an objective educational tone and advise the patient to consult their licensed physician."
+        )
+        url = "https://api.openai.com/v1/chat/completions"
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": f"Clinical Evidence Context:\n{context_text}\n\nUser Question:\n{query}"},
+            ],
+            "temperature": 0.2,
+            "max_tokens": 600,
+        }
+        try:
+            with httpx.Client(timeout=20.0) as client:
+                res = client.post(url, headers=headers, json=payload)
+                if res.status_code == 200:
+                    data = res.json()
+                    choices = data.get("choices", [])
+                    if choices:
+                        return choices[0].get("message", {}).get("content", "").strip()
+        except Exception:
+            return None
+        return None

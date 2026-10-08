@@ -3,7 +3,7 @@ from typing import Optional
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=(".env", "../.env"), extra="ignore")
 
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "INFO"
@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "gpt-4o-mini"
     OPENAI_API_KEY: Optional[str] = None
     ANTHROPIC_API_KEY: Optional[str] = None
+    GEMINI_API_KEY: Optional[str] = None
 
 
 settings = Settings()
